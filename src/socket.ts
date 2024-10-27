@@ -1,48 +1,69 @@
-import { Server } from "socket.io";
-import { DefaultEventsMap } from "socket.io";
+import { Server, Socket } from "socket.io";
 import { IState } from "./types";
 
-export const setupSocket = (
-  io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>
-) => {
-  const state: IState = {
-    board_content: "",
-    locked_by_user_id: "",
-  };
+const state: IState = {
+  board_content: "",
+  locked_by_user_id: "",
+};
 
-  io.on("connection", (socket) => {
+// Helper functions for handling state
+const lockAccess = (user_id: string) => {
+  if (!state.locked_by_user_id) {
+    state.locked_by_user_id = user_id;
+    return true;
+  }
+  return false;
+};
+
+const releaseAccess = (user_id: string) => {
+  if (state.locked_by_user_id === user_id) {
+    state.locked_by_user_id = "";
+    return true;
+  }
+  return false;
+};
+
+const updateBoardContent = (board_content: string) => {
+  state.board_content = board_content;
+};
+
+// Main function to set up socket
+export const setupSocket = (io: Server) => {
+  io.on("connection", (socket: Socket) => {
     console.log("A user connected:", socket.id);
-
-    console.log("Emitting state - ", JSON.stringify(state));
     io.emit("state", state);
 
-    socket.on("request-access", (user_id) => {
-      if (
-        !Array.from(io.sockets.sockets.keys()).includes(state.locked_by_user_id)
-      ) {
-        state.locked_by_user_id = user_id;
-        io.emit("state", state);
-      }
-      if (user_id && !state.locked_by_user_id.length) {
-        state.locked_by_user_id = user_id;
-        io.emit("state", state);
-      }
-    });
-
-    socket.on("remove-access", (user_id) => {
-      if (user_id && state.locked_by_user_id === user_id) {
-        state.locked_by_user_id = "";
-        io.emit("state", state);
-      }
-    });
-
-    socket.on("board-content", (board_content) => {
-      state.board_content = board_content;
-      io.emit("state", state);
-    });
-
-    socket.on("disconnect", () => {
-      console.log("User disconnected:", socket.id);
-    });
+    socket.on("request-access", (user_id: string) =>
+      handleRequestAccess(io, user_id)
+    );
+    socket.on("remove-access", (user_id: string) =>
+      handleRemoveAccess(io, user_id)
+    );
+    socket.on("board-content", (board_content: string) =>
+      handleBoardContent(io, board_content)
+    );
+    socket.on("disconnect", () => handleDisconnect(socket));
   });
+};
+
+// Event handlers
+const handleRequestAccess = (io: Server, user_id: string) => {
+  if (lockAccess(user_id)) {
+    io.emit("state", state);
+  }
+};
+
+const handleRemoveAccess = (io: Server, user_id: string) => {
+  if (releaseAccess(user_id)) {
+    io.emit("state", state);
+  }
+};
+
+const handleBoardContent = (io: Server, board_content: string) => {
+  updateBoardContent(board_content);
+  io.emit("state", state);
+};
+
+const handleDisconnect = (socket: Socket) => {
+  console.log("User disconnected:", socket.id);
 };
