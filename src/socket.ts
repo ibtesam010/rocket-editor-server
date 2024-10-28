@@ -32,8 +32,15 @@ export const setupSocket = (
         io.emit("state", state);
       }
     });
-    socket.on("board-content", (board_content) => {
-      state.board_content = board_content;
+    socket.on("board-content", ({ board_content, user_id }) => {
+      console.log(JSON.stringify(state));
+      console.log(board_content, user_id);
+      if (!state.locked_by_user_id.length) {
+        state.locked_by_user_id = user_id;
+        state.board_content = board_content;
+      } else if (state.locked_by_user_id === user_id) {
+        state.board_content = board_content;
+      }
       io.emit("state", state);
     });
     socket.on("disconnect", () => {
